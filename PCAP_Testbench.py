@@ -12,6 +12,8 @@ import matplotlib
 matplotlib.use('Qt5Agg')
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+import serial.tools.list_ports
+
 
 PLOT_HISTORY = 100
 MAX_PORTS = 5
@@ -51,16 +53,21 @@ class DataCollector(QWidget):
         # GUI: COM ports
         for i in range(MAX_PORTS):
             port_layout = QHBoxLayout()
-            lbl = QLabel(f"COM{i+1}:")
+            lbl = QLabel(f"Device {i+1}:")
             port_cb = QComboBox()
             port_cb.addItem("")  # empty by default
-            for j in range(1,11):
-                port_cb.addItem(f"COM{j}")
+            # 🔍 Populate only active COM ports
+            available_ports = serial.tools.list_ports.comports()
+            for port in available_ports:
+                port_cb.addItem(port.device)
+
             activate_cb = QCheckBox("Activate")
             activate_cb.stateChanged.connect(lambda state, idx=i: self.on_activate_toggled(idx))
+
             port_layout.addWidget(lbl)
             port_layout.addWidget(port_cb)
             port_layout.addWidget(activate_cb)
+
             self.layout.addLayout(port_layout)
             self.port_selectors.append((port_cb, activate_cb))
 
@@ -82,6 +89,10 @@ class DataCollector(QWidget):
         self.test_cb = QCheckBox("Test Mode")
         self.test_cb.stateChanged.connect(self.on_test_mode_toggled)
         self.layout.addWidget(self.test_cb)
+        
+        refresh_btn = QPushButton("Refresh Ports")
+        refresh_btn.clicked.connect(self.refresh_ports)
+        self.layout.addWidget(refresh_btn)
 
         # Buttons
         btn_layout = QHBoxLayout()
@@ -101,6 +112,9 @@ class DataCollector(QWidget):
         btn_layout.addWidget(self.clear_btn)
         btn_layout.addWidget(self.save_btn)
         self.layout.addLayout(btn_layout)
+
+        
+
 
         # Figure
         self.fig = Figure()
@@ -124,6 +138,17 @@ class DataCollector(QWidget):
             port = self.port_selectors[idx][0].currentText()
             if port in self.active_ports:
                 self.active_ports.remove(port)
+
+    def refresh_ports(self):
+        available_ports = [p.device for p in serial.tools.list_ports.comports()]
+        for port_cb, _ in self.port_selectors:
+            current = port_cb.currentText()
+            port_cb.clear()
+            port_cb.addItem("")
+            port_cb.addItems(available_ports)
+            if current in available_ports:
+                port_cb.setCurrentText(current)
+
 
     def on_test_mode_toggled(self):
         self.test_mode = self.test_cb.isChecked()
