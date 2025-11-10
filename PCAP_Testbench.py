@@ -17,6 +17,7 @@ PLOT_HISTORY = 100
 MAX_PORTS = 5
 CHANNELS_PER_PORT = 6
 
+#todo MOVE Legend to outside
 
 
 class DataCollector(QWidget):
