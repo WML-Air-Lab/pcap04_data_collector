@@ -15,7 +15,7 @@ from matplotlib.figure import Figure
 import serial.tools.list_ports
 
 
-PLOT_HISTORY = 100
+PLOT_HISTORY = 1000
 MAX_PORTS = 5
 CHANNELS_PER_PORT = 6
 
@@ -41,6 +41,10 @@ class DataCollector(QWidget):
         self.lines = []
         self.channel_map = {}
         self.test_phases = [[random.uniform(0, 2*math.pi) for _ in range(CHANNELS_PER_PORT)] for _ in range(MAX_PORTS)]
+        self.resize(1200, 800)      # initial size
+        self.setMinimumSize(800, 600)  # optional lower limit
+
+
 
         self.plot_update_counter = 0
         self.plot_update_interval = 10  # update plot every 10 ticks (10ms * 10 = 100ms → 10Hz)
@@ -174,7 +178,11 @@ class DataCollector(QWidget):
 
             self.ax.relim()
             self.ax.autoscale_view()
-            self.ax.legend()
+            handles, labels = self.ax.get_legend_handles_labels()
+            if labels:  # Only draw legend if there are valid labels
+                self.ax.legend(loc='center left', bbox_to_anchor=(1.05, 0.5), borderaxespad=0)
+                self.fig.subplots_adjust(right=0.8)
+
             self.canvas.draw_idle()
         else:
             # Remove line and buffer
@@ -187,7 +195,11 @@ class DataCollector(QWidget):
                 del self.channel_map[(idx,ch)]
                 self.ax.relim()
                 self.ax.autoscale_view()
-                self.ax.legend()
+                handles, labels = self.ax.get_legend_handles_labels()
+                if labels:  # Only draw legend if there are valid labels
+                    self.ax.legend(loc='center left', bbox_to_anchor=(1.05, 0.5), borderaxespad=0)
+                    self.fig.subplots_adjust(right=0.8)
+
                 self.canvas.draw_idle()
 
     # --- Logging controls ---
@@ -215,10 +227,64 @@ class DataCollector(QWidget):
         self.canvas.draw_idle()
 
     def clear_figure(self):
+        # Clear the shared time buffer
         self.time_buffer.clear()
-        for buf in self.plot_buffers:
-            buf.clear()
-        self.ax.clear()
+        # Clear in-memory saved CSV rows so "saved data" is reset when the user
+        # clicks Clear Figure. We keep csv_columns (headers) intact.
+        self.csv_rows.clear()
+
+        # Remove lines and buffers for channels that are currently unchecked in the UI.
+        # For channels that remain checked, simply clear their data buffer so the
+        # plotted line (and its legend entry) stays but with no points.
+        for (i, c) in list(self.channel_map.keys()):
+            try:
+                ch_box = self.channel_checkboxes[i][c]
+            except Exception:
+                # If the checkbox structure changed unexpectedly, remove the channel
+                entry = self.channel_map.pop((i, c), None)
+                if entry:
+                    try:
+                        entry['line'].remove()
+                    except Exception:
+                        pass
+                    buf = entry.get('buffer')
+                    if buf in self.plot_buffers:
+                        self.plot_buffers.remove(buf)
+                continue
+
+            if not ch_box.isChecked():
+                # Channel is unchecked: remove its line and buffer entirely
+                entry = self.channel_map.pop((i, c), None)
+                if entry:
+                    try:
+                        entry['line'].remove()
+                    except Exception:
+                        pass
+                    buf = entry.get('buffer')
+                    if buf in self.plot_buffers:
+                        self.plot_buffers.remove(buf)
+            else:
+                # Channel is checked: clear its data buffer but keep the plot/legend
+                self.channel_map[(i, c)]['buffer'].clear()
+
+        # Recompute limits and update legend to reflect removed channels only
+        self.ax.relim()
+        self.ax.autoscale_view()
+        handles, labels = self.ax.get_legend_handles_labels()
+        if labels:
+            self.ax.legend(loc='center left', bbox_to_anchor=(1.05, 0.5), borderaxespad=0)
+            self.fig.subplots_adjust(right=0.8)
+        else:
+            # No labels -> remove any existing legend and reset subplot spacing
+            leg = self.ax.get_legend()
+            if leg:
+                try:
+                    leg.remove()
+                except Exception:
+                    pass
+            self.fig.subplots_adjust(right=1.0)
+
+        # Redraw canvas
         self.canvas.draw_idle()
 
     def save_csv(self):
@@ -265,10 +331,11 @@ class DataCollector(QWidget):
                 line.set_data(list(self.time_buffer)[-min_len:], list(buf)[-min_len:])
             self.ax.relim()
             self.ax.autoscale_view()
-            if self.lines:
-                self.ax.legend()
-            self.canvas.draw_idle()
-
+            handles, labels = self.ax.get_legend_handles_labels()
+            if labels:  # Only draw legend if there are valid labels
+                self.ax.legend(loc='center left', bbox_to_anchor=(1.05, 0.5), borderaxespad=0)
+                self.fig.subplots_adjust(right=0.8)
+            self.canvas.draw_idle() 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
