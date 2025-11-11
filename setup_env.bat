@@ -15,7 +15,8 @@ REM Activate and install dependencies
 call venv\Scripts\activate
 echo Installing required packages...
 pip install --upgrade pip
-pip install PyQt5 matplotlib
+pip install PyQt5==5.15.11 matplotlib==3.10.7 
+pip install pyserial==3.5
 
 echo.
 echo ========================================
